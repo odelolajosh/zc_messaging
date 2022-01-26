@@ -3,6 +3,10 @@ import styled from "styled-components"
 export const Container = styled.main`
   display: flex;
   height: 100%;
+<<<<<<< HEAD
+=======
+  padding-top: 1.93rem;
+>>>>>>> 1e9e425d22a277c54a792601b7b08af84142eec1
   gap: 8px;
   background: #f9f9f9;
 `

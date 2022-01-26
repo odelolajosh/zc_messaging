@@ -1,6 +1,7 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate, useParams, Outlet } from "react-router-dom"
-import { MessageBoard } from "@zuri/zuri-ui"
+import { Helmet } from "react-helmet"
+import { MessageBoard, PluginHeader } from "@zuri/zuri-ui"
 import { SubscribeToChannel } from "@zuri/utilities"
 import { Container, MessagingArea, TypingNotice } from "./MessageBoard.style"
 import fetchDefaultRoom from "../../utils/fetchDefaultRoom"
@@ -11,6 +12,8 @@ import {
   useGetMessagesInRoomQuery,
   useSendMessageInRoomMutation
 } from "../../redux/services/messages.js"
+import { useGetRoomsAvailableToUserQuery } from "../../redux/services/rooms"
+import generatePageTitle from "../../utils/generatePageTitle"
 
 const MessagingBoard = () => {
   const { roomId } = useParams()
@@ -18,19 +21,29 @@ const MessagingBoard = () => {
   const dispatch = useDispatch()
   const authUser = useSelector(state => state.authUser)
   const currentWorkspaceId = localStorage.getItem("currentWorkspace")
-  const {
-    data: roomMessages,
-    error,
-    isLoading
-  } = useGetMessagesInRoomQuery(
-    {
-      orgId: currentWorkspaceId,
-      roomId
-    },
-    {
-      refetchOnMountOrArgChange: true
-    }
-  )
+  const [pageTitle, setPageTitle] = useState("")
+  const [roomName, setRoomName] = useState("unknown-channel")
+  const { data: roomsAvailable, isLoading: IsLoadingRoomsAvailable } =
+    useGetRoomsAvailableToUserQuery(
+      {
+        orgId: currentWorkspaceId,
+        userId: authUser.user_id
+      },
+      {
+        skip: Boolean(!authUser.user_id),
+        refetchOnMountOrArgChange: true
+      }
+    )
+  const { data: roomMessages, isLoading: isLoadingRoomMessages } =
+    useGetMessagesInRoomQuery(
+      {
+        orgId: currentWorkspaceId,
+        roomId
+      },
+      {
+        refetchOnMountOrArgChange: true
+      }
+    )
   const [sendNewMessage, { isLoading: isSending }] =
     useSendMessageInRoomMutation()
   useEffect(() => {
@@ -38,6 +51,11 @@ const MessagingBoard = () => {
       fetchDefaultRoom(currentWorkspaceId, authUser?.user_id).then(result => {
         navigateTo(`/${result.room_id}`, { replace: true })
       })
+    }
+    if (roomsAvailable) {
+      const room = roomsAvailable[roomId]
+      setRoomName(room?.room_name)
+      setPageTitle(generatePageTitle(room?.room_name))
     }
     if (roomId && authUser.user_id) {
       SubscribeToChannel(roomId, data => {
@@ -67,7 +85,7 @@ const MessagingBoard = () => {
         }
       })
     }
-  }, [roomId, authUser])
+  }, [roomId, authUser, roomsAvailable])
 
   const sendMessageHandler = async message => {
     const currentDate = new Date()
@@ -158,27 +176,34 @@ const MessagingBoard = () => {
     // do something with the file
   }
 
-  return roomId && roomMessages && !isLoading ? (
-    <Container>
-      <MessagingArea>
-        <div style={{ height: "calc(100% - 29px)" }}>
-          <MessageBoard
-            messages={roomMessages}
-            onSendMessage={sendMessageHandler}
-            onReact={reactHandler}
-            onSendAttachedFile={SendAttachedFileHandler}
-            currentUserId={authUser?.user_id}
-          />
-        </div>
-        {/* <TypingNotice>Omo Jesu is typing</TypingNotice> */}
-      </MessagingArea>
+  return roomId ? (
+    <>
+      <Helmet>
+        <title>{pageTitle}</title>
+      </Helmet>
+      <PluginHeader name={`#${roomName}`} />
+      <Container>
+        <MessagingArea>
+          <div style={{ height: "calc(100% - 29px)" }}>
+            <MessageBoard
+              isLoadingMessages={isLoadingRoomMessages}
+              messages={roomMessages || []}
+              onSendMessage={sendMessageHandler}
+              onReact={reactHandler}
+              onSendAttachedFile={SendAttachedFileHandler}
+              currentUserId={authUser?.user_id}
+            />
+          </div>
+          {/* <TypingNotice>Omo Jesu is typing</TypingNotice> */}
+        </MessagingArea>
 
-      {/* 
+        {/* 
       Right sidebar like thread, profile and co
       ... All routed in InMessageRoute component
     */}
-      <Outlet />
-    </Container>
+        <Outlet />
+      </Container>
+    </>
   ) : null
 }
 
